@@ -48,7 +48,6 @@ out/
 
 # Project specific
 logs/
-test_videos/
 trial/
 frontend/.eslintcache
 
