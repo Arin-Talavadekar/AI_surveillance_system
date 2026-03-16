@@ -327,65 +327,73 @@ def detection_worker():
             if results[0].boxes is not None:
 
                 boxes = results[0].boxes.xyxy.cpu().numpy()
-                ids = results[0].boxes.id
+                # Use all boxes detected, regardless of whether tracker assigned an ID yet
+                ids_raw = results[0].boxes.id
+                
+                # If no IDs assigned yet, create a list of -1 (meaning untracked)
+                if ids_raw is None:
+                    ids = np.full(len(boxes), -1, dtype=int)
+                else:
+                    ids = ids_raw.cpu().numpy().astype(int)
 
-                if ids is not None:
+                boxes, ids = select_top_people(
+                    boxes,
+                    ids,
+                    frame,
+                    settings.MAX_TRACKED_PEOPLE
+                )
 
-                    ids = ids.cpu().numpy().astype(int)
+                for box, pid in zip(boxes, ids):
 
-                    boxes, ids = select_top_people(
-                        boxes,
-                        ids,
-                        frame,
-                        settings.MAX_TRACKED_PEOPLE
-                    )
+                    x1, y1, x2, y2 = map(int, box)
+                    cx = (x1 + x2) // 2
+                    cy = (y1 + y2) // 2
 
-                    for box, pid in zip(boxes, ids):
-
-                        x1, y1, x2, y2 = box
-                        cx = (x1 + x2) // 2
-                        cy = (y1 + y2) // 2
-
+                    is_anomalous = False
+                    
+                    # Only track trajectories for confirmed persistent IDs (pid > -1)
+                    if pid > -1:
                         if pid not in trajectory_history:
                             trajectory_history[pid] = []
 
                         trajectory_history[pid].append((cx, cy))
                         
                         # Check instability for this specific person
-                        is_anomalous = False
                         if len(trajectory_history[pid]) >= 3:
                             traj = trajectory_history[pid]
                             speeds = [np.sqrt((traj[i][0]-traj[i-1][0])**2 + (traj[i][1]-traj[i-1][1])**2) for i in range(1, len(traj))]
                             if np.std(speeds) > 15: # Threshold for individual instability
                                 is_anomalous = True
                         
-                        # Store metadata for alert snapshots
-                        people_metadata.append((box, is_anomalous))
-
-                        # Determine drawing color
-                        color = (0, 0, 255) if is_anomalous else (0, 255, 0)
-                        label = f"ANOMALY {pid}" if is_anomalous else f"ID:{pid}"
-
-                        cv2.rectangle(
-                            annotated,
-                            (x1, y1),
-                            (x2, y2),
-                            color,
-                            2
-                        )
-
-                        cv2.putText(
-                            annotated,
-                            label,
-                            (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6,
-                            color,
-                            2
-                        )
-
                         if len(trajectory_history[pid]) > settings.TRAJECTORY_HISTORY:
                             trajectory_history[pid].pop(0)
+                    
+                    people_boxes.append(box)
+                    
+                    # Store metadata for alert snapshots
+                    people_metadata.append((box, is_anomalous))
+
+                    # Determine drawing color
+                    color = (0, 0, 255) if is_anomalous else (0, 255, 0)
+                    label = f"ANOMALY {pid}" if is_anomalous else (f"ID:{pid}" if pid > -1 else "PERSON")
+
+                    cv2.rectangle(
+                        annotated,
+                        (x1, y1),
+                        (x2, y2),
+                        color,
+                        2
+                    )
+
+                    cv2.putText(
+                        annotated,
+                        label,
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6,
+                        color,
+                        2
+                    )
 
         # =========================
         # WEAPON DETECTION

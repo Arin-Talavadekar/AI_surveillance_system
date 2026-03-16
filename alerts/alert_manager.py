@@ -101,7 +101,7 @@ def send_email_alert(alert_type, score, timestamp):
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-            for box, score in weapon_boxes:
+            for box, w_score in weapon_boxes:
                 x1, y1, x2, y2 = map(int, box)
                 color = (255, 0, 0) # Blue for weapons (as requested)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)

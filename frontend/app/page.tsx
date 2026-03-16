@@ -51,7 +51,7 @@ export default function Dashboard() {
         type: item.type,
         timestamp: item.timestamp,
         score: item.score
-      })).reverse(); // Reverse so newest are at the top, since API sends them chronologically
+      })).reverse().slice(0, 6); // Keep only the 6 most recent alerts
       setAlerts(mappedAlerts)
     }
 

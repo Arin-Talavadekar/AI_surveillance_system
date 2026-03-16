@@ -25,7 +25,7 @@ class Settings:
     # DETECTION CONFIDENCE
     # =========================
     PERSON_CONF = 0.35
-    WEAPON_CONF = 0.50
+    WEAPON_CONF = 0.65
 
 
     # =========================
@@ -60,7 +60,7 @@ class Settings:
     # PERFORMANCE CONTROLS
     # =========================
     # maximum tracked people (prevents tracker overload)
-    MAX_TRACKED_PEOPLE = 12
+    MAX_TRACKED_PEOPLE = 15
 
     # frame queue size
     FRAME_QUEUE_SIZE = 10
