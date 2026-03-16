@@ -33,7 +33,6 @@ MANIFEST
 *.pth
 *.pkl
 *.weights
-models/
 runs/
 
 # Node / Javascript (Frontend)
