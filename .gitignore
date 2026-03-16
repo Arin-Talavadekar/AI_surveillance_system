@@ -1,7 +1,10 @@
 # Environments
 venv/
-.env
 .env.*
+
+# Media / Data
+temp_uploads/
+test_videos/
 
 # Python
 __pycache__/

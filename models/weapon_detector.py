@@ -58,7 +58,8 @@ def detect_weapon(frame):
             frame,
             conf=settings.WEAPON_CONF,
             device=device,
-            verbose=False
+            verbose=False,
+            half=(device.type == "cuda")
         )
         return results
     

@@ -60,11 +60,12 @@ def detect_people(frame):
             persist=True,                 # keeps tracking IDs across frames
             classes=[0],                  # class 0 = person
             conf=settings.PERSON_CONF,
-            iou=0.5,
+            iou=0.7,                      # Increased for better precision & less overlap
             tracker="bytetrack.yaml",
             verbose=False,
             device=device,
-            stream=False
+            stream=False,
+            half=(device.type == "cuda")
         )
         return results
     

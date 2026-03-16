@@ -2,6 +2,7 @@ import threading
 import time
 import uvicorn
 import sys
+import os
 
 from pipeline.async_engine import start_engine, shutdown_event
 
@@ -41,7 +42,7 @@ def run_api():
         )
         
         # Run until shutdown_event is set
-        loop = server.run()
+        server.run()
         
     except Exception as e:
         print(f"[ERROR] API SERVER ERROR: {e}")
@@ -73,19 +74,21 @@ if __name__ == "__main__":
     )
     api_thread.start()
 
-    # main loop - wait for CTRL+C
+    # main loop - wait for CTRL+C or shutdown signal
     try:
-        while True:
-            time.sleep(0.1)
+        while not shutdown_event.is_set():
+            time.sleep(0.5)
 
     except KeyboardInterrupt:
         print("\n[SYSTEM] Shutdown signal received (CTRL+C)")
         shutdown_event.set()
-        print("[SYSTEM] Waiting for threads to finish...")
         
-        # Wait for threads to finish with timeout
-        ai_thread.join(timeout=5)
-        api_thread.join(timeout=5)
-        
-        print("[SYSTEM] System shutdown complete")
-        sys.exit(0)
+    print("[SYSTEM] Waiting for threads to finish...")
+    
+    # Wait for threads to finish with timeout
+    ai_thread.join(timeout=3)
+    api_thread.join(timeout=3)
+    
+    print("[SYSTEM] System shutdown complete.")
+    # Force exit to ensure no ghost threads remain
+    os._exit(0)

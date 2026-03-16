@@ -1,9 +1,14 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 class Settings:
 
     # =========================
     # CAMERA SETTINGS
     # =========================
-    CAMERA_INDEX = 1
+    CAMERA_INDEX = 0
     VIDEO_SOURCE = None
 
     FRAME_WIDTH = 480
@@ -24,24 +29,24 @@ class Settings:
     # =========================
     # DETECTION CONFIDENCE
     # =========================
-    PERSON_CONF = 0.35
-    WEAPON_CONF = 0.65
+    PERSON_CONF = 0.55
+    WEAPON_CONF = 0.45
 
 
     # =========================
     # MULTI-RATE PIPELINE
     # =========================
-    # YOLO person detection (1 = every frame for consistent detection)
+    # YOLO person detection (1 = every frame)
     PERSON_INTERVAL = 1
 
     # weapon model (heavy)
-    WEAPON_INTERVAL = 5
+    WEAPON_INTERVAL = 2
 
-    # EfficientNet sampling (faster feature extraction for better temporal coverage)
-    FEATURE_INTERVAL = 2
+    # EfficientNet sampling
+    FEATURE_INTERVAL = 6
 
-    # GRU temporal inference (run more frequently for responsive anomaly detection)
-    GRU_INTERVAL = 5
+    # GRU temporal inference
+    GRU_INTERVAL = 15
 
 
     # =========================
@@ -68,15 +73,15 @@ class Settings:
     # behavior queue size
     BEHAVIOR_QUEUE_SIZE = 5
 
-    # number of behavior workers (increase to reduce queue bottleneck)
-    NUM_BEHAVIOR_WORKERS = 2
+    # number of behavior workers
+    NUM_BEHAVIOR_WORKERS = 1
 
 
     # =========================
     # ALERT THRESHOLDS
     # =========================
-    RIOT_THRESHOLD = 0.55
-    EARLY_WARNING_THRESHOLD = 0.45
+    RIOT_THRESHOLD = 0.60
+    EARLY_WARNING_THRESHOLD = 0.50
     ESCALATION_THRESHOLD = 0.05
 
 
@@ -101,7 +106,7 @@ class Settings:
     # =========================
     # LOGGING
     # =========================
-    LOG_LEVEL = "INFO"  # DEBUG, INFO, WARNING, ERROR
+    LOG_LEVEL = "INFO"
     LOG_FILE = "logs/system.log"
 
 
@@ -109,13 +114,12 @@ class Settings:
     # EMAIL ALERTS
     # =========================
     ENABLE_EMAIL_ALERTS = True
-    SMTP_SERVER = "smtp.gmail.com"  # Replace with your SMTP server (e.g., smtp.office365.com)
-    SMTP_PORT = 465                 # Or 587 for TLS
-    SMTP_USERNAME = "arintalavadekar2223@ternaengg.ac.in"
-    SMTP_PASSWORD = "pmiz aeok rqoe jxve"
-    ALERT_EMAIL_SENDER = "arintalavadekar2223@ternaengg.ac.in"
+    SMTP_SERVER = "smtp.gmail.com"
+    SMTP_PORT = 465
+    SMTP_USERNAME = os.getenv("SMTP_USERNAME", "arintalavadekar2223@ternaengg.ac.in")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    ALERT_EMAIL_SENDER = os.getenv("ALERT_EMAIL_SENDER", "arintalavadekar2223@ternaengg.ac.in")
     
-    # You can add as many emails as you want to this list
     ALERT_EMAIL_RECIPIENT = [
         "ashwinipanada2223@ternaengg.ac.in",
         "maheepchopra2223@ternaengg.ac.in"
@@ -125,7 +129,7 @@ class Settings:
     # ADMIN CREDENTIALS
     # =========================
     ADMIN_USERNAME = "admin"
-    ADMIN_PASSWORD = "password123"  # USER: Please change this!
+    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "password123")
 
 
 settings = Settings()

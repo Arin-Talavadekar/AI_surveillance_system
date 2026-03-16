@@ -29,6 +29,8 @@ try:
     feature_model = EfficientNet.from_pretrained("efficientnet-b0")
     feature_model._fc = torch.nn.Identity()
     feature_model = feature_model.to(device)
+    if device.type == "cuda":
+        feature_model = feature_model.half()
     feature_model.eval()
     logger.info("Feature extractor model loaded successfully")
 except Exception as e:
@@ -89,6 +91,8 @@ def extract_feature(frame):
 
         # normalize + tensor
         tensor = transform(img).unsqueeze(0).to(device)
+        if device.type == "cuda":
+            tensor = tensor.half()
 
         with torch.inference_mode():
             features = feature_model(tensor)

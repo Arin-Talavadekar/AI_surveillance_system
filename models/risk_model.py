@@ -9,10 +9,11 @@ from config.config import settings
 try:
     model = joblib.load(settings.RISK_MODEL)
     MODEL_LOADED = True
-except Exception:
+except Exception as e:
     model = None
     MODEL_LOADED = False
-    print("WARNING: Risk model not found. Falling back to GRU anomaly score.")
+    print(f"WARNING: Risk model could not be loaded: {e}")
+    print("Falling back to GRU anomaly score.")
 
 
 # =========================

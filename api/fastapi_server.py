@@ -3,7 +3,7 @@ import time
 import os
 import shutil
 import secrets
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +13,25 @@ from pipeline import shared_state
 from pipeline.async_engine import trigger_source_switch
 
 app = FastAPI()
+
+# Global tracker for active views
+last_view_time = 0
+
+# Auto-pause watchdog
+@app.on_event("startup")
+async def startup_event():
+    import threading
+    def watchdog():
+        while True:
+            time.sleep(5)
+            if shared_state.system_active and (time.time() - last_view_time > 15):
+                print("[SYSTEM] Auto-pausing AI engine (no active viewers)...")
+                with shared_state.state_lock:
+                    shared_state.system_active = False
+                # Wipe metrics immediately on auto-pause
+                shared_state.reset_state()
+    
+    threading.Thread(target=watchdog, daemon=True).start()
 
 # =========================
 # SECURITY CONFIG
@@ -55,11 +74,15 @@ app.add_middleware(
 # =========================
 # VIDEO STREAM GENERATOR
 # =========================
-def generate_frames():
+# Global tracker for active views
+last_view_time = 0
 
+def generate_frames():
+    global last_view_time
     target_delay = 0.03   # ~30 FPS browser refresh limit
 
     while True:
+        last_view_time = time.time() # Update activity
 
         # copy frame reference quickly (MINIMAL lock)
         with shared_state.state_lock:
@@ -115,7 +138,8 @@ def system_status():
             "gru_score": float(shared_state.latest_gru),
             "risk_score": float(shared_state.latest_risk),
             "risk_trend": float(shared_state.latest_trend),
-            "latest_alert": shared_state.latest_alert
+            "latest_alert": shared_state.latest_alert,
+            "locations": shared_state.latest_locations
         }
 
 
@@ -177,20 +201,23 @@ def risk_history():
 # =========================
 # HEALTH CHECK
 # =========================
-@app.get("/health")
-def health():
-
-    return {"status": "ok"}
-
-
-# =========================
-# SOURCE SWITCHING
-# =========================
 @app.post("/switch_to_live")
 def switch_to_live():
     # Calling with None forces engine to fallback to CAMERA_INDEX or VIDEO_SOURCE
+    with shared_state.state_lock:
+        shared_state.system_active = True
     trigger_source_switch(None)
     return {"status": "success", "message": "Switched to live feed"}
+
+
+@app.post("/stop_system")
+def stop_system():
+    with shared_state.state_lock:
+        shared_state.system_active = False
+        shared_state.active_source = "None"
+    # Mandatory global reset for a clean dashboard
+    shared_state.reset_state()
+    return {"status": "success", "message": "System stopped"}
 
 
 @app.post("/upload_video")
@@ -211,6 +238,8 @@ def upload_video(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
         
     abs_path = os.path.abspath(file_path)
+    with shared_state.state_lock:
+        shared_state.system_active = True
     trigger_source_switch(abs_path)
     return {"status": "success", "message": f"Switched to video {file.filename}"}
 

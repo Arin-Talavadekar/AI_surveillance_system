@@ -94,10 +94,10 @@ def send_email_alert(alert_type, score, timestamp):
             # Draw custom boxes for the alert snapshot
             # People: Green (Normal) or Red (Anomalous)
             # Weapons: Blue
-            for box, is_anomalous in people_metadata:
+            for box, is_anomalous, pid in people_metadata:
                 x1, y1, x2, y2 = map(int, box)
                 color = (0, 0, 255) if is_anomalous else (0, 255, 0) # Red if anomalous, else Green
-                label = "ANOMALY" if is_anomalous else "PERSON"
+                label = f"ANOMALY ID:{pid}" if is_anomalous else f"ID:{pid}"
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 

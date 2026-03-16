@@ -51,27 +51,32 @@ const VideoFeed = ({ fps }: VideoFeedProps) => {
     if (file) handleUpload(file);
   }, []);
 
-  const clearFeed = useCallback(() => {
+  const clearFeed = useCallback(async () => {
     setSource("none");
     if (fileInputRef.current) fileInputRef.current.value = "";
+    try {
+      await fetch(`${BACKEND_URL}/stop_system`, { method: "POST" });
+    } catch (e) {
+      console.error("Failed to stop system on backend:", e);
+    }
   }, []);
 
   const isActive = source !== "none";
 
   return (
-    <section className="col-span-12 lg:col-span-8 relative group h-full min-h-[400px]">
+    <section className="col-span-12 lg:col-span-8 relative group">
       <div
-        className={`relative aspect-video w-full h-full bg-secondary rounded-lg overflow-hidden glass-ring transition-shadow duration-300 ${isDragging ? "shadow-[0_0_0_2px_hsl(var(--risk-critical)/0.5)]" : ""}`}
+        className={`relative aspect-video w-full bg-black rounded-lg overflow-hidden glass-ring transition-shadow duration-300 ${isDragging ? "shadow-[0_0_0_2px_hsl(var(--risk-critical)/0.5)]" : ""}`}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
       >
         {/* Corner crosshairs */}
         <div className="absolute inset-0 pointer-events-none z-10">
-          <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-foreground/20" />
-          <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-foreground/20" />
-          <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-foreground/20" />
-          <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-foreground/20" />
+          <div className="absolute top-4 left-4 w-8 h-8 border-t border-l border-foreground/10" />
+          <div className="absolute top-4 right-4 w-8 h-8 border-t border-r border-foreground/10" />
+          <div className="absolute bottom-4 left-4 w-8 h-8 border-b border-l border-foreground/10" />
+          <div className="absolute bottom-4 right-4 w-8 h-8 border-b border-r border-foreground/10" />
         </div>
 
         {/* LIVE indicator */}
@@ -112,11 +117,11 @@ const VideoFeed = ({ fps }: VideoFeedProps) => {
             <img
               src={`${BACKEND_URL}/video_stream?t=${Date.now()}`}
               alt="Live Surveillance Feed"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
               unselectable="on"
             />
             {/* Scanline overlay for that premium hacker aesthetic */}
-            <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(0,0,0,0)_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-20 z-10" />
+            <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(0,0,0,0)_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-10 z-10" />
           </>
         )}
 

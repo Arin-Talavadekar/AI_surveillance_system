@@ -6,6 +6,7 @@ import VideoFeed from '@/components/VideoFeed'
 import ThreatMetrics from '@/components/ThreatMetrics'
 import AlertLog from '@/components/AlertLog'
 import RiskTimeline from '@/components/RiskTimeline'
+import SpatialRadar from '@/components/SpatialRadar'
 import type { Alert } from '@/components/AlertLog'
 
 import { fetchSystemStatus, fetchAlerts, fetchRiskHistory, SystemStatus, AlertData } from '@/lib/api'
@@ -18,6 +19,7 @@ export default function Dashboard() {
     gru_score: 0.0,
     risk_score: 0.0,
     risk_trend: 0.0,
+    locations: [],
   })
 
   const [isBackendConnected, setIsBackendConnected] = useState(false)
@@ -45,19 +47,17 @@ export default function Dashboard() {
   useEffect(() => {
     const handleAlertsUpdate = async () => {
       const data = await fetchAlerts()
-      // Map API AlertData to Alert format expected by AlertLog
       const mappedAlerts: Alert[] = data.map((item: AlertData, index: number) => ({
         id: typeof item.id === 'string' ? item.id : `alert-${index}-${item.timestamp}`,
         type: item.type,
         timestamp: item.timestamp,
         score: item.score
-      })).reverse().slice(0, 6); // Keep only the 6 most recent alerts
+      })).reverse().slice(0, 6);
       setAlerts(mappedAlerts)
     }
 
     const handleHistoryUpdate = async () => {
       const data = await fetchRiskHistory()
-      // Map raw numbers to the { frame, risk } format the AreaChart expects
       const mappedHistory = data.map((val: number, idx: number) => ({
         frame: idx,
         risk: val
@@ -68,7 +68,6 @@ export default function Dashboard() {
     handleAlertsUpdate()
     handleHistoryUpdate()
     
-    // Poll slower endpoints every 2s
     const dataInterval = setInterval(() => {
       handleAlertsUpdate()
       handleHistoryUpdate()
@@ -78,37 +77,63 @@ export default function Dashboard() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 md:p-6 selection:bg-primary/30 font-mono">
+    <div className="min-h-screen bg-background text-foreground p-4 md:p-8 selection:bg-primary/30 font-mono overflow-x-hidden">
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
-        className="max-w-[1700px] mx-auto grid grid-cols-1 gap-6 lg:grid-cols-12"
+        transition={{ duration: 0.6, ease: [0.2, 0.8, 0.2, 1] }}
+        className="max-w-[1800px] mx-auto flex flex-col gap-8"
       >
         {/* Main Header */}
-        <header className="col-span-1 border-b border-foreground/10 pb-4 lg:col-span-12 flex flex-col items-center justify-center text-center">
-          <h1 className="text-xl md:text-3xl font-black tracking-tighter uppercase mb-1">SENTINEL COMMAND CONSOLE</h1>
-          <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-widest">Surveillance & Threat Detection</p>
+        <header className="flex flex-col items-center justify-center text-center py-4 border-b border-foreground/5 mb-2 relative">
+           <div className="absolute top-0 left-0 w-32 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+           <div className="absolute bottom-0 right-0 w-32 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter uppercase mb-2 bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/70">
+            SIGHTLINE COMMAND CONSOLE
+          </h1>
+          <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-[0.4em] font-bold opacity-60">
+            Cognitive Surveillance & Threat Intelligence
+          </p>
         </header>
 
-        {/* Video Feed — 8 cols */}
-        <VideoFeed fps={status.fps} />
+        {/* Primary Intelligence Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left Column: Tactical Control & Video (8 cols) */}
+          <div className="lg:col-span-8 flex flex-col gap-8">
+            <VideoFeed fps={status.fps} />
+          </div>
 
-        {/* Right Panel — 4 cols */}
-        <section className="col-span-1 lg:col-span-4 flex flex-col gap-6 h-full">
-          <ThreatMetrics
-            systemStatus={isBackendConnected ? "Online" : "Offline"}
-            riskScore={status.risk_score}
-            escalationTrend={status.risk_trend || 0.0}
-            peopleCount={status.people_count}
-            gruScore={status.gru_score}
-            weaponDetected={status.weapon_detected}
-          />
-          <AlertLog alerts={alerts} />
-        </section>
+          {/* Right Column: Tactical Detail (4 cols) */}
+          <aside className="lg:col-span-4 flex flex-col gap-8 h-full">
+            <ThreatMetrics
+              systemStatus={isBackendConnected ? "Online" : "Offline"}
+              riskScore={status.risk_score}
+              escalationTrend={status.risk_trend || 0.0}
+              peopleCount={status.people_count}
+              gruScore={status.gru_score}
+              weaponDetected={status.weapon_detected}
+            />
+            
+            <SpatialRadar locations={status.locations || []} />
+          </aside>
+        </div>
 
-        {/* Timeline — full width */}
-        <RiskTimeline history={riskHistory} />
+        {/* Intelligence History Desk (Bottom Row) */}
+        <footer className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+          <div className="lg:col-span-4">
+            <AlertLog alerts={alerts} />
+          </div>
+          <div className="lg:col-span-8">
+            <RiskTimeline history={riskHistory} />
+          </div>
+        </footer>
+
+        {/* Footer Metadata */}
+        <div className="flex justify-between items-center text-[9px] uppercase tracking-widest text-muted-foreground/30 font-black pt-8 border-t border-foreground/5">
+            <span>SIGHTLINE_OS_V2.1</span>
+            <span>ENCRYPTED_LINK_ESTABLISHED</span>
+            <span>© 2026 COGNITIVE_SECURITY_SYSTEMS</span>
+        </div>
       </motion.div>
     </div>
   )
