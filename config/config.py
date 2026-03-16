@@ -4,7 +4,7 @@ class Settings:
     # CAMERA SETTINGS
     # =========================
     CAMERA_INDEX = 1
-    VIDEO_SOURCE = "test_videos/test_video_4.mp4"
+    VIDEO_SOURCE = None
 
     FRAME_WIDTH = 480
     FRAME_HEIGHT = 360
@@ -25,7 +25,7 @@ class Settings:
     # DETECTION CONFIDENCE
     # =========================
     PERSON_CONF = 0.35
-    WEAPON_CONF = 0.65
+    WEAPON_CONF = 0.50
 
 
     # =========================
@@ -35,7 +35,7 @@ class Settings:
     PERSON_INTERVAL = 1
 
     # weapon model (heavy)
-    WEAPON_INTERVAL = 12
+    WEAPON_INTERVAL = 5
 
     # EfficientNet sampling (faster feature extraction for better temporal coverage)
     FEATURE_INTERVAL = 2
@@ -95,7 +95,7 @@ class Settings:
     # =========================
     # DEBUG VISUALIZATION
     # =========================
-    SHOW_DEBUG_OVERLAY = True
+    SHOW_DEBUG_OVERLAY = False
 
 
     # =========================
@@ -103,6 +103,29 @@ class Settings:
     # =========================
     LOG_LEVEL = "INFO"  # DEBUG, INFO, WARNING, ERROR
     LOG_FILE = "logs/system.log"
+
+
+    # =========================
+    # EMAIL ALERTS
+    # =========================
+    ENABLE_EMAIL_ALERTS = True
+    SMTP_SERVER = "smtp.gmail.com"  # Replace with your SMTP server (e.g., smtp.office365.com)
+    SMTP_PORT = 465                 # Or 587 for TLS
+    SMTP_USERNAME = "arintalavadekar2223@ternaengg.ac.in"
+    SMTP_PASSWORD = "pmiz aeok rqoe jxve"
+    ALERT_EMAIL_SENDER = "arintalavadekar2223@ternaengg.ac.in"
+    
+    # You can add as many emails as you want to this list
+    ALERT_EMAIL_RECIPIENT = [
+        "ashwinipanada2223@ternaengg.ac.in",
+        "maheepchopra2223@ternaengg.ac.in"
+    ]
+
+    # =========================
+    # ADMIN CREDENTIALS
+    # =========================
+    ADMIN_USERNAME = "admin"
+    ADMIN_PASSWORD = "password123"  # USER: Please change this!
 
 
 settings = Settings()

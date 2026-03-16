@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Navbar from '@/components/dashboard/Navbar'
-import VideoFeedCard from '@/components/dashboard/VideoFeedCard'
-import QuickStats from '@/components/dashboard/QuickStats'
-import SystemStatusCard from '@/components/dashboard/SystemStatus'
-import AlertLog from '@/components/dashboard/AlertLog'
-import RiskTimelineChart from '@/components/dashboard/RiskTimelineChart'
+import { motion } from 'framer-motion'
+import VideoFeed from '@/components/VideoFeed'
+import ThreatMetrics from '@/components/ThreatMetrics'
+import AlertLog from '@/components/AlertLog'
+import RiskTimeline from '@/components/RiskTimeline'
+import type { Alert } from '@/components/AlertLog'
 
 import { fetchSystemStatus, fetchAlerts, fetchRiskHistory, SystemStatus, AlertData } from '@/lib/api'
 
@@ -17,14 +17,12 @@ export default function Dashboard() {
     weapon_detected: false,
     gru_score: 0.0,
     risk_score: 0.0,
+    risk_trend: 0.0,
   })
 
-  // Start disconnected until first poll succeeds
   const [isBackendConnected, setIsBackendConnected] = useState(false)
-  const [alerts, setAlerts] = useState<AlertData[]>([])
-  const [riskHistory, setRiskHistory] = useState<number[]>([])
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true)
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [alerts, setAlerts] = useState<Alert[]>([])
+  const [riskHistory, setRiskHistory] = useState<{ frame: number; risk: number }[]>([])
 
   useEffect(() => {
     const handleStatusUpdate = async () => {
@@ -32,7 +30,6 @@ export default function Dashboard() {
       if (data) {
         setStatus(data)
         setIsBackendConnected(true)
-        setLastUpdate(new Date())
       } else {
         setIsBackendConnected(false)
       }
@@ -48,13 +45,24 @@ export default function Dashboard() {
   useEffect(() => {
     const handleAlertsUpdate = async () => {
       const data = await fetchAlerts()
-      setAlerts(data)
+      // Map API AlertData to Alert format expected by AlertLog
+      const mappedAlerts: Alert[] = data.map((item: AlertData, index: number) => ({
+        id: typeof item.id === 'string' ? item.id : `alert-${index}-${item.timestamp}`,
+        type: item.type,
+        timestamp: item.timestamp,
+        score: item.score
+      })).reverse(); // Reverse so newest are at the top, since API sends them chronologically
+      setAlerts(mappedAlerts)
     }
 
     const handleHistoryUpdate = async () => {
       const data = await fetchRiskHistory()
-      setRiskHistory(data)
-      setIsLoadingHistory(false)
+      // Map raw numbers to the { frame, risk } format the AreaChart expects
+      const mappedHistory = data.map((val: number, idx: number) => ({
+        frame: idx,
+        risk: val
+      }))
+      setRiskHistory(mappedHistory)
     }
 
     handleAlertsUpdate()
@@ -70,35 +78,38 @@ export default function Dashboard() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-slate-950 font-sans text-slate-200">
-      <Navbar riskScore={status.risk_score} lastUpdate={lastUpdate} />
+    <div className="min-h-screen bg-background text-foreground p-4 md:p-6 selection:bg-primary/30 font-mono">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
+        className="max-w-[1700px] mx-auto grid grid-cols-1 gap-6 lg:grid-cols-12"
+      >
+        {/* Main Header */}
+        <header className="col-span-1 border-b border-foreground/10 pb-4 lg:col-span-12 flex flex-col items-center justify-center text-center">
+          <h1 className="text-xl md:text-3xl font-black tracking-tighter uppercase mb-1">SENTINEL COMMAND CONSOLE</h1>
+          <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-widest">Surveillance & Threat Detection</p>
+        </header>
 
-      {/* Main Container */}
-      <main className="mx-auto w-full max-w-[1800px] p-4 sm:p-6 pb-20">
-        
-        {/* ROW 1: 12-column Grid (Video 8 / Stats 4) */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
-          
-          {/* Main Monitor (Left 8 columns on large screens) */}
-          <div className="col-span-1 lg:col-span-8">
-            <VideoFeedCard fps={status.fps} />
-          </div>
+        {/* Video Feed — 8 cols */}
+        <VideoFeed fps={status.fps} />
 
-          {/* Stats Stack (Right 4 columns on large screens) */}
-          <div className="col-span-1 flex flex-col gap-4 lg:col-span-4 lg:gap-6 h-full">
-            <QuickStats status={status} />
-            <SystemStatusCard status={status} isBackendConnected={isBackendConnected} />
-            <AlertLog alerts={alerts} />
-          </div>
+        {/* Right Panel — 4 cols */}
+        <section className="col-span-1 lg:col-span-4 flex flex-col gap-6 h-full">
+          <ThreatMetrics
+            systemStatus={isBackendConnected ? "Online" : "Offline"}
+            riskScore={status.risk_score}
+            escalationTrend={status.risk_trend || 0.0}
+            peopleCount={status.people_count}
+            gruScore={status.gru_score}
+            weaponDetected={status.weapon_detected}
+          />
+          <AlertLog alerts={alerts} />
+        </section>
 
-        </div>
-
-        {/* ROW 2: Full width graph timeline */}
-        <div className="mt-4 lg:mt-6">
-          <RiskTimelineChart data={riskHistory} isLoading={isLoadingHistory} />
-        </div>
-
-      </main>
+        {/* Timeline — full width */}
+        <RiskTimeline history={riskHistory} />
+      </motion.div>
     </div>
   )
 }

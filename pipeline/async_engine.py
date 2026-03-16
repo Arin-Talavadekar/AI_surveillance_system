@@ -37,7 +37,13 @@ behavior_queue = queue.Queue(maxsize=settings.BEHAVIOR_QUEUE_SIZE)
 # ENGINE SHUTDOWN FLAG
 # =========================
 shutdown_event = threading.Event()
+source_switch_event = threading.Event()
+target_video_source = None
 
+def trigger_source_switch(new_source=None):
+    global target_video_source
+    target_video_source = new_source
+    source_switch_event.set()
 
 # =========================
 # GLOBAL STATE
@@ -71,6 +77,8 @@ try:
     else:
         cap = cv2.VideoCapture(settings.CAMERA_INDEX)
         source_info = f"Camera {settings.CAMERA_INDEX}"
+
+    shared_state.active_source = source_info
 
     if not cap.isOpened():
         logger.error(f"Failed to open camera/video source: {source_info}")
@@ -169,18 +177,83 @@ def select_top_people(boxes, ids, frame, max_people):
 # CAMERA THREAD
 # =========================
 def camera_reader():
+    global cap, camera_initialized, frame_count, trajectory_history, weapon_confidence_history
 
     if not camera_initialized or cap is None:
-        logger.error("Camera not initialized, cannot read frames")
-        return
+        logger.warning("Camera not initially initialized, will wait for valid source")
 
     while not shutdown_event.is_set():
+
+        if source_switch_event.is_set():
+            logger.info("Source switch requested, resetting AI engine state...")
+            if cap is not None:
+                cap.release()
+            
+            with frame_count_lock:
+                frame_count = 0
+            
+            with frame_queue.mutex:
+                frame_queue.queue.clear()
+            with behavior_queue.mutex:
+                behavior_queue.queue.clear()
+                
+            trajectory_history.clear()
+            weapon_confidence_history.clear()
+            feature_buffer.clear()
+            
+            with shared_state.state_lock:
+                shared_state.risk_history.clear()
+                shared_state.alert_history.clear()
+                shared_state.latest_risk = 0.0
+                shared_state.latest_gru = 0.0
+                shared_state.latest_trend = 0.0
+                shared_state.people_count = 0
+                shared_state.weapon_detected = 0
+                shared_state.latest_frame = np.zeros((settings.FRAME_HEIGHT, settings.FRAME_WIDTH, 3), dtype=np.uint8)
+
+            try:
+                if target_video_source is not None:
+                    cap = cv2.VideoCapture(target_video_source)
+                    source_info = f"Upload: {target_video_source}"
+                else:
+                    if settings.VIDEO_SOURCE:
+                        cap = cv2.VideoCapture(settings.VIDEO_SOURCE)
+                        source_info = settings.VIDEO_SOURCE
+                    else:
+                        cap = cv2.VideoCapture(settings.CAMERA_INDEX)
+                        source_info = f"Camera {settings.CAMERA_INDEX}"
+                
+                if cap.isOpened():
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, settings.FRAME_WIDTH)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.FRAME_HEIGHT)
+                    camera_initialized = True
+                    shared_state.active_source = source_info
+                    logger.info(f"Switched source to: {source_info}")
+                else:
+                    logger.error(f"Failed to open new source: {source_info}")
+                    shared_state.active_source = "None"
+                    cap = None
+                    camera_initialized = False
+            except Exception as e:
+                logger.error(f"Error switching source: {e}")
+                cap = None
+                camera_initialized = False
+            
+            source_switch_event.clear()
+
+        if not camera_initialized or cap is None:
+            time.sleep(0.5)
+            continue
 
         try:
             ret, frame = cap.read()
 
             if not ret:
-                if settings.VIDEO_SOURCE:
+                if target_video_source is not None:
+                    # Looping user uploaded video
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    continue
+                elif settings.VIDEO_SOURCE:
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     logger.debug("Video restarted from beginning")
                     continue
@@ -234,6 +307,7 @@ def detection_worker():
             continue
 
         annotated = frame.copy()
+        raw_frame = frame.copy()
 
         with frame_count_lock:
             frame_count += 1
@@ -241,6 +315,7 @@ def detection_worker():
 
         people_boxes = []
         people_ids = []
+        people_metadata = [] # To store (box, is_anomalous)
 
         # =========================
         # PERSON DETECTION
@@ -268,28 +343,6 @@ def detection_worker():
                     for box, pid in zip(boxes, ids):
 
                         x1, y1, x2, y2 = box
-
-                        people_boxes.append(box)
-                        people_ids.append(pid)
-
-                        cv2.rectangle(
-                            annotated,
-                            (x1, y1),
-                            (x2, y2),
-                            (255, 0, 0),
-                            2
-                        )
-
-                        cv2.putText(
-                            annotated,
-                            f"ID:{pid}",
-                            (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6,
-                            (255, 0, 0),
-                            2
-                        )
-
                         cx = (x1 + x2) // 2
                         cy = (y1 + y2) // 2
 
@@ -297,6 +350,39 @@ def detection_worker():
                             trajectory_history[pid] = []
 
                         trajectory_history[pid].append((cx, cy))
+                        
+                        # Check instability for this specific person
+                        is_anomalous = False
+                        if len(trajectory_history[pid]) >= 3:
+                            traj = trajectory_history[pid]
+                            speeds = [np.sqrt((traj[i][0]-traj[i-1][0])**2 + (traj[i][1]-traj[i-1][1])**2) for i in range(1, len(traj))]
+                            if np.std(speeds) > 15: # Threshold for individual instability
+                                is_anomalous = True
+                        
+                        # Store metadata for alert snapshots
+                        people_metadata.append((box, is_anomalous))
+
+                        # Determine drawing color
+                        color = (0, 0, 255) if is_anomalous else (0, 255, 0)
+                        label = f"ANOMALY {pid}" if is_anomalous else f"ID:{pid}"
+
+                        cv2.rectangle(
+                            annotated,
+                            (x1, y1),
+                            (x2, y2),
+                            color,
+                            2
+                        )
+
+                        cv2.putText(
+                            annotated,
+                            label,
+                            (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.6,
+                            color,
+                            2
+                        )
 
                         if len(trajectory_history[pid]) > settings.TRAJECTORY_HISTORY:
                             trajectory_history[pid].pop(0)
@@ -320,8 +406,8 @@ def detection_worker():
 
                     area = (box[2] - box[0]) * (box[3] - box[1])
 
-                    if score >= settings.WEAPON_CONF and area > 400:
-                        weapon_boxes.append(tuple(map(int, box)))
+                    if score >= settings.WEAPON_CONF and area > 200:
+                        weapon_boxes.append((tuple(map(int, box)), score))
                         max_weapon_conf = max(max_weapon_conf, score)
 
                 if len(weapon_boxes) > 0:
@@ -332,35 +418,39 @@ def detection_worker():
             else:
                 weapon_confidence_history.append(0.0)
 
-        # Temporal smoothing: weapon alert if average confidence >= threshold
+        # Calculate average confidence for smoothing
         avg_weapon_conf = np.mean(list(weapon_confidence_history)) if len(weapon_confidence_history) > 0 else 0.0
-        weapon_signal = 1 if avg_weapon_conf >= settings.WEAPON_CONF else 0
-
-        if weapon_signal and len(weapon_boxes) > 0:
-
-            # Only trigger alert once per detection burst
-            if len(weapon_confidence_history) > 0 and weapon_confidence_history[-1] >= settings.WEAPON_CONF:
+        
+        # ALERT LOGIC: Trigger alert only if smoothed signal is strong (prevents flickering emails)
+        ALERT_THRESHOLD = 0.50
+        weapon_signal = 1 if avg_weapon_conf >= ALERT_THRESHOLD else 0
+        
+        if weapon_signal and len(weapon_confidence_history) >= 2:
+            if weapon_confidence_history[-1] >= ALERT_THRESHOLD:
                 trigger_alert("Weapon detected", avg_weapon_conf)
 
-            for b in weapon_boxes:
+        # DRAWING LOGIC: Draw boxes immediately if seen in this frame
+        if len(weapon_boxes) > 0:
+            for b, score in weapon_boxes:
 
                 x1, y1, x2, y2 = b
+                color = (255, 0, 0) # Blue for weapons
 
                 cv2.rectangle(
                     annotated,
                     (x1, y1),
                     (x2, y2),
-                    (0, 0, 255),
+                    color,
                     2
                 )
 
                 cv2.putText(
                     annotated,
-                    f"WEAPON:{avg_weapon_conf:.2f}",
-                    (x1, y1 - 10),
+                    "WEAPON",
+                    (x1, y2 + 20),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.6,
-                    (0, 0, 255),
+                    color,
                     2
                 )
 
@@ -463,9 +553,12 @@ def detection_worker():
         with shared_state.state_lock:
 
             shared_state.latest_frame = annotated
+            shared_state.latest_raw_frame = raw_frame
             shared_state.system_fps = fps
             shared_state.people_count = people_count
             shared_state.weapon_detected = weapon_signal
+            shared_state.latest_people_boxes = people_metadata
+            shared_state.latest_weapon_boxes = weapon_boxes
 
     logger.info("Detection worker shutdown")
 
@@ -557,9 +650,8 @@ def behavior_worker():
 # =========================
 def start_engine():
 
-    if not camera_initialized:
-        logger.error("Camera not initialized. Cannot start engine.")
-        return
+    # We don't block start_engine if camera is not initialized anymore, 
+    # to allow the API to set a source later if needed.
 
     threading.Thread(target=camera_reader, daemon=False).start()
     threading.Thread(target=detection_worker, daemon=False).start()

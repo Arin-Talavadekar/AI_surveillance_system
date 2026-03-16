@@ -12,6 +12,12 @@ state_lock = threading.Lock()
 # VIDEO STREAM FRAME
 # =========================
 latest_frame = None
+latest_raw_frame = None
+active_source = "None"
+
+# Metadata for alert drawing
+latest_people_boxes = []     # List of (x1, y1, x2, y2, is_anomalous)
+latest_weapon_boxes = []     # List of (x1, y1, x2, y2)
 
 
 # =========================
